@@ -1,0 +1,70 @@
+MODULE main
+    VAR
+        ejetor : boolean;
+        paleta: {deslig, lento, rapido};
+	chuva : {deslig, fraca, forte};
+        p1 : process parabrisa(ejetor, paleta, chuva);
+    ASSIGN
+        init(ejetor) := FALSE;
+        init(paleta) := {deslig};
+	init(chuva) := {deslig};
+
+    -- Verifica que nunca existe um estado em que a paleta = deslig e ejetor = TRUE ou a chuva diferente de deslig.
+    SPEC AF !(paleta = deslig & (ejetor = TRUE | !(chuva = deslig)));
+
+    -- Verifica que dado o estado paleta = deslig e ejetor = FALSE e chuva = deslig, então paleta = lento ou deslig, ejetor TRUE ou FALSE e chuva = deslig, fraca ou forte.
+    SPEC AG (paleta = deslig & ejetor = FALSE & chuva = deslig -> AF ((paleta = lento | paleta = deslig) & (ejetor = TRUE | ejetor = FALSE) & (chuva = deslig | chuva = fraca | chuva = forte)))
+
+    -- Verifica que se o ejetor = TRUE, a paleta nao altera a velocidade.
+    SPEC AG ((paleta = lento & ejetor = TRUE & chuva = forte)-> AX (paleta = lento))
+    SPEC AG ((paleta = rapido & ejetor = TRUE & chuva = fraca)-> AX (paleta = rapido))
+
+    -- Verifica que dado um estado paleta = deslig, o próximo estado deve ser paleta = deslig ou lento.
+    LTLSPEC G (paleta = deslig -> X(paleta = deslig | paleta = lento))
+
+    -- Verifica que dado um estado paleta = rapido, o próximo estado deve ser paleta = rapido ou lento.
+    LTLSPEC G (paleta = rapido -> X(paleta = rapido | paleta = lento))
+
+    -- Verifica que dado o estado da paleta = deslig e chuva = forte, em algum momento no futuro paleta = rapido.
+    LTLSPEC F (paleta = deslig & chuva = forte ->  paleta = rapido)
+
+MODULE parabrisa(ejetor, paleta, chuva)
+    ASSIGN
+        next(paleta) :=
+                    case		
+			(paleta = deslig) & (chuva = deslig) & (ejetor = FALSE) : {deslig};
+			(paleta = deslig) & (ejetor = TRUE) : {lento};
+			(paleta = deslig) & !(chuva = deslig) : {lento};
+
+			(paleta = lento) & (ejetor = FALSE) & (chuva = deslig): {deslig};
+			(paleta = lento) & (ejetor = FALSE) & (chuva = fraca): {lento};
+			(paleta = lento) & (ejetor = FALSE) & (chuva = forte): {rapido};
+			(paleta = lento) & (ejetor = TRUE): {lento};
+
+			(paleta = rapido) & (ejetor = FALSE) & ((chuva = deslig) | (chuva = fraca)) : {lento};
+			(paleta = rapido) & (ejetor = FALSE) & (chuva = forte) : {rapido};
+                        (paleta = rapido) & (ejetor = TRUE): {rapido};
+
+                        TRUE : {deslig};
+                    esac;
+        next(ejetor) :=
+                    case
+                       ejetor = TRUE : FALSE;
+                       ejetor = FALSE : {TRUE, FALSE};
+                    esac;
+	next(chuva) :=
+                    case
+                       chuva = deslig : {deslig, fraca, forte};
+                       chuva = fraca: {deslig, forte};
+		       chuva = forte: {deslig, fraca};
+                    esac;
+    FAIRNESS
+        running
+
+-- AF prepo -> Propoe que a condição sempre vai ser TRUE, no futuro.
+-- AG prepo -> Propoe que a condição seja sempre verdade em todos os estados.
+-- AX prepo -> Propoe que a condição seja alcançada no proximo estado.
+
+-- F prepo -> Propoe que a condição vai ser TRUE, no futuro.
+-- G prepo -> Propoe que a condição seja verdade em todos os estados.
+-- X prepo -> Propoe que a condição seja alcançada no proximo estado.
